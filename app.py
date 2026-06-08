@@ -1,5 +1,4 @@
 import os
-import threading
 from flask import Flask, request
 from twilio.twiml.messaging_response import MessagingResponse
 import anthropic
@@ -15,34 +14,31 @@ sessions = {}
 
 def get_or_create_session(phone_number):
     if phone_number not in sessions:
-        session = client.beta.sessions.create(
-            agent=AGENT_ID,
-            environment_id=ENVIRONMENT_ID,
-            title=f"WhatsApp - {phone_number}"
+        session = client.beta.agents.sessions.create(
+            agent_id=AGENT_ID,
         )
         sessions[phone_number] = session.id
     return sessions[phone_number]
 
 def get_agent_reply(session_id, user_text):
     """Envia mensagem e aguarda resposta do agente."""
-    # Abre stream ANTES de enviar a mensagem
     reply_parts = []
 
-    with client.beta.sessions.events.stream(session_id=session_id) as stream:
-        # Envia a mensagem do usuário
-        threading.Thread(target=lambda: client.beta.sessions.events.send(
-            session_id=session_id,
-            events=[{"type": "user.message", "content": [{"type": "text", "text": user_text}]}]
-        )).start()
+    response = client.beta.agents.sessions.events.create(
+        agent_id=AGENT_ID,
+        session_id=session_id,
+        event={
+            "type": "user_turn",
+            "content": [{"type": "text", "text": user_text}],
+        },
+    )
 
-        # Coleta a resposta
-        for event in stream:
-            if event.type == "agent.message":
-                for block in event.content:
-                    if hasattr(block, "text"):
-                        reply_parts.append(block.text)
-            elif event.type == "session.status_idle":
-                break
+    # Collect text from all assistant content blocks in the response
+    for event in response.events if hasattr(response, "events") else []:
+        if getattr(event, "type", None) == "assistant_turn":
+            for block in getattr(event, "content", []):
+                if hasattr(block, "text"):
+                    reply_parts.append(block.text)
 
     return "".join(reply_parts) or "Desculpe, não consegui processar sua mensagem."
 
