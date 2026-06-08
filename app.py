@@ -14,8 +14,9 @@ sessions = {}
 
 def get_or_create_session(phone_number):
     if phone_number not in sessions:
-        session = client.beta.agents.sessions.create(
-            agent_id=AGENT_ID,
+        session = client.beta.sessions.create(
+            agent=AGENT_ID,
+            environment_id=ENVIRONMENT_ID,
         )
         sessions[phone_number] = session.id
     return sessions[phone_number]
@@ -24,8 +25,7 @@ def get_agent_reply(session_id, user_text):
     """Envia mensagem e aguarda resposta do agente."""
     reply_parts = []
 
-    response = client.beta.agents.sessions.events.create(
-        agent_id=AGENT_ID,
+    response = client.beta.sessions.events.create(
         session_id=session_id,
         event={
             "type": "user_turn",
